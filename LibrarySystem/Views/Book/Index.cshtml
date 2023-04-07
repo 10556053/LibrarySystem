@@ -1,0 +1,321 @@
+﻿@{
+    ViewBag.Title = "Index";
+    Layout = "~/Views/Shared/_Layout.cshtml";
+}
+
+<h2 id="title_txt">圖書管理系統</h2>
+<div>
+    <div>
+        <div class="form-group">
+            <label>書籍名稱</label>
+            <input id="bookName" placeholder="請輸入書籍名稱" style="width: 350px;";/>
+        </div>
+        <div class="form-group">
+            <label vertical-align:middle;>書籍種類</label>
+            <input id="classDropdown" vertical-align:middle;  style="width: 350px;"/>
+        </div>
+        <div class="form-group">
+            <label>借閱人</label>
+            <input id="keeperDropdown"  style="width: 350px;"/>
+            <br>
+        </div>
+        <div class="form-group">
+            <label>借閱狀態</label>
+            <input id="statusDropdown"  style="width: 350px;"/>
+            <br>
+        </div>
+        <div class="form-group">
+            <div class="button-group">
+                <button id="searchBtn" class="k-button searchArg-button">搜尋</button>
+                <button id="clearBtn" class="k-button searchArg-button">清除</button>
+                <button id="addBtn" class="k-button searchArg-button">新增</button>
+            </div>
+        </div>
+        <div id="grid"></div>
+
+        <script>
+
+            $(document).ready(function () {
+                eventBind();
+                if (localStorage.getItem("myArgs") == null) {
+                    clearLocalstorage()
+                }
+                $("#bookName").kendoAutoComplete({
+                    dataTextField: "BookName",
+                    filter: "contains",
+                    dataSource: {
+                        transport: {
+                            read: {
+                                url: "/Book/GetAllBook",
+                                dataType: "json",
+                                type: "post"
+                            }
+                        }
+                    }
+                });
+                $("#classDropdown").kendoDropDownList({
+                    dataTextField: "Text",
+                    dataValueField: "Value",
+                    dataSource: {
+                        transport: {
+                            read: {
+                                url: "/Book/GetClassData",
+                                dataType: "json",
+                                type: "post"
+                            }
+                        }
+                    },
+                    size: "medium",
+                    rounded: "medium",
+                    fillMode: "solid",
+                    optionLabel: "請選擇..."
+                });
+                $("#keeperDropdown").kendoDropDownList({
+                    dataTextField: "Text",
+                    dataValueField: "Value",
+                    fillMode: "solid",
+                    dataSource: {
+                        transport: {
+                            read: {
+                                url: "/Book/GetKeeperData",
+                                dataType: "json",
+                                type: "post"
+                            }
+                        }
+                    },
+                    optionLabel: "請選擇..."
+                });
+                $("#statusDropdown").kendoDropDownList({
+                    dataTextField: "Text",
+                    dataValueField: "Value",
+                    dataSource: {
+                        transport: {
+                            read: {
+                                url: "/Book/GetStatusData",
+                                dataType: "json",
+                                type: "post"
+                            }
+                        }
+                    },
+                    optionLabel: "請選擇..."
+                });
+                $("#grid").kendoGrid({
+                    dataSource: {
+                        transport: {
+                            read: {
+                                url: "/Book/GetBookData",
+                                type: "post",
+                                dataType: "json",
+                                data: function () {
+                                    return {
+                                        bookName: JSON.parse(localStorage.getItem("myArgs")).bookName,
+                                        bookClass: JSON.parse(localStorage.getItem("myArgs")).bookClass,
+                                        bookKeeper: JSON.parse(localStorage.getItem("myArgs")).bookKeeper,
+                                        bookStatus: JSON.parse(localStorage.getItem("myArgs")).bookStatus
+                                    }
+                                }
+                            }
+                        },
+                        pageSize: 20
+                    },
+                    height: 550,
+                    scrollable: true,
+                    sortable: true,
+                    filterable: true,
+                    pageable: {
+                        input: true,
+                        numeric: false
+                    },
+                    columns: [
+                        { field: "BookId", title: "書籍編號" },
+                        { field: "BookClass", title: "圖書類別", width: "13%" },
+                        {
+                            field: "BookName", title: "書籍名稱", template: function (dataItem) {
+                                return "<a onclick ='Detail(this)' style='color:#136694'>" + dataItem.BookName + "</a>";
+                            }, width: "30%"
+                        },
+                        { field: "BookBoughtDate", title: "購書日期", width: "12%" },
+                        { field: "BookStatus", title: "借閱狀態", width: "13%" },
+                        { field: "BookKeeper", title: "借閱人", width: "10%" },
+                        {
+                            command: {
+                                className: "command-lend",
+                                text: "借閱紀錄",
+                                click: function (e) {
+                                    e.preventDefault();
+                                    var tr = $(e.target).closest("tr"); // get the current table row (tr)
+                                    var data = this.dataItem(tr);
+                                    InspectLendRecord(data.BookId);
+                                }
+                            }, title: " ", width: "80px"
+                        },
+                        {
+                            command: {
+                                text: "編輯",
+                                className: "command-edit",
+                                click: function (e) {
+                                    e.preventDefault();
+                                    var tr = $(e.target).closest("tr"); // get the current table row (tr)
+                                    var data = this.dataItem(tr);
+                                    updateBook(data.BookId, "modify")
+                                },
+                            }, title: " ", width: "60px"
+                        },
+                        {
+                            command: {
+                                text: "刪除",
+                                className: "command-delete",
+                                click: function (e) {
+                                    e.preventDefault();
+                                    var tr = $(e.target).closest("tr"); // get the current table row (tr)
+                                    var data = this.dataItem(tr);
+                                    deleteBook(data.BookId, data.BookName)
+                                },
+                            }, title: " ", width: "60px"
+                        }
+                    ]
+                });
+                $("#grid").data("kendoGrid").hideColumn("BookId");
+                var myArg = JSON.parse(localStorage.getItem("myArgs"))
+                $("#bookName").val(myArg.bookName);
+                $("#classDropdown").data("kendoDropDownList").value(myArg.bookClass)
+                $("#keeperDropdown").data("kendoDropDownList").value(myArg.bookKeeper)
+                $("#statusDropdown").data("kendoDropDownList").value(myArg.bookStatus)
+            });
+            function eventBind() {
+                $("#clearBtn").click(function () {
+                    alert("確定清空搜尋條件?");
+                    $("#bookName").val("")
+                    $("#classDropdown").data("kendoDropDownList").value("")
+                    $("#keeperDropdown").data("kendoDropDownList").value("")
+                    $("#statusDropdown").data("kendoDropDownList").value("")
+                    clearLocalstorage()
+                    $("#grid").data("kendoGrid").dataSource.read();
+                });
+                $("#addBtn").click(function () {
+                    // $("#grid").data("kendoGrid").dataSource.read({ color: "Red" });
+                    updateBook("null", "add")
+                });
+                $("#searchBtn").click(function () {
+                    // $("#grid").data("kendoGrid").dataSource.read({ color: "Red" });
+                    writeToLocalstorage()
+                    $("#grid").data("kendoGrid").dataSource.read();
+                    $("#grid").data("kendoGrid").dataSource.query({
+                        page: 1,
+                        pageSize: 20
+                    });
+                });
+            }
+            function Detail(e) {
+                var tr = $(e).closest("tr"); // get the current table row (tr)
+                var grid = $("#grid").data("kendoGrid");
+                var data = grid.dataItem(tr);
+                
+                updateBook(data.BookId , "inspect")
+            }
+            function updateBook(bookId, status) {
+                base64Url = btoa("bookId=" + bookId + "&status=" + status)
+                var encodedUrl = "/Book/UpdateBook/?" + base64Url
+                window.location.href = encodedUrl;
+                writeToLocalstorage()
+            }
+            function InspectLendRecord(bookId) {
+                base64Url = btoa("bookId=" + bookId)
+                var encodedUrl = "/Book/InspectLendRecord/?" + base64Url
+                window.location.href = encodedUrl;
+                writeToLocalstorage()
+            }
+            function deleteBook(bookId , bookName) {
+                if (window.confirm("確定要刪除: "+bookName)) {
+                    $.ajax({
+                        type: "POST",
+                        url: "/Book/DeleteBook",
+                        data: "bookId=" + bookId,
+                        dataType: "json",
+                        success: function (response) { ///因為status回傳200所以會進到success
+                            if (response.status == true) {
+                                alert(response.message);
+                                $("#grid").data("kendoGrid").dataSource.read();
+                            } else {
+                                alert(response.message)
+                            }
+                        }, error: function (error) {   ///4xx ,5xx等失敗碼才會到error
+                            alert("系統發生錯誤");
+                        }
+                    });
+                    return false;
+                }
+            }
+
+            function writeToLocalstorage() {
+                var bookSearchArgs = {
+                    bookName: $("#bookName").val(),
+                    bookClass: $("#classDropdown").data("kendoDropDownList").value(),
+                    bookKeeper: $("#keeperDropdown").data("kendoDropDownList").value(),
+                    bookStatus: $("#statusDropdown").data("kendoDropDownList").value()
+                }
+                localStorage.setItem("myArgs", JSON.stringify(bookSearchArgs))
+            }
+            function clearLocalstorage() {
+                var bookSearchArgs = {
+                    bookName: "",
+                    bookClass: "",
+                    bookKeeper: "",
+                    bookStatus: ""
+                }
+                localStorage.setItem("myArgs", JSON.stringify(bookSearchArgs))
+            }
+        </script>
+    </div>
+
+
+    <style>
+        .k-button {
+            padding: 8px 15px;
+            background-color: #F0F0F0;
+        }
+
+        .command-lend {
+            background-color: #d5ebb1;
+        }
+
+        .command-edit {
+            background-color: #a5dcff;
+        }
+
+        .command-delete {
+            background-color: #ebb1d5;
+        }
+
+        .k-grid .k-command-cell {
+            padding: 0px;
+            text-align: center;
+        }
+
+        label {
+            width: 90px;
+            text-align: right;
+            display: inline-block;
+            margin-right: 20px;
+        }
+
+        .form-group {
+            margin-left: 30px;
+            margin-bottom: 20px;
+        }
+
+        .button-group {
+            margin-bottom: 15px;
+            margin-left: 30px;
+        }
+
+        .searchArg-button {
+            margin-right: 15px;
+            background-color: #8dd4e4;
+        }
+
+        #title_txt {
+            margin-top: 35px;
+        }
+    </style>
+</div>
